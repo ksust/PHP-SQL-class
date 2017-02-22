@@ -20,7 +20,7 @@ Class SQL
     public $limit = "LIMIT 100";//字符串，默认100条,格式  limit  起始,条数
     public $field = "*";//字段值，默认*
 
-    function __construct($tableName, $conn = array())
+    function __construct($tableName=null, $conn = array())
     {
         //构造方法默认使用配置数据库连接
         if (count($conn) == 0) $conn = include("database.php");//连接信息，来自文件的返回数组
@@ -31,7 +31,7 @@ Class SQL
         } catch (PDOException $e) {
             die("数据库连接错误:" . $e->getMessage());
         }
-        $this->tableColum = $this->db->query("SHOW COLUMNS FROM `$this->tableName` ")->fetchAll(PDO::FETCH_ASSOC);//获取列名
+       if($tableName!=null) $this->tableColum = $this->db->query("SHOW COLUMNS FROM `$this->tableName` ")->fetchAll(PDO::FETCH_ASSOC);//获取列名
     }
 
     //查找最新一条，一般情况返回true，没有找到返回false；若指明返回找到的行，则返回行(一维)
@@ -83,7 +83,7 @@ Class SQL
     }
 
     //必须结合where使用，错误返回false，否则返回影响行数>=1
-    function update($data, $dissql = false)
+    function update($data=array(), $dissql = false)
     {
         if ($this->where == "") return false;
         if (count($data) <= 0) return false;//默认改变值不能为空
@@ -153,7 +153,13 @@ Class SQL
 }
 
 //M方法，表名，链接（为空时使用当前目录  database.php）
-function M($tableName, $conn = array())
+function M($tableName=null, $conn = array())
 {
     return new SQL($tableName, $conn);
 }
+/*
+ * 1.01:小更改：
+               1.对于直接使用SQL语句查询而不特别针对某表时，可直接使用M方法不传参（或者传参null），然后直接使用M()->db->query($sql)->fetchAll(PDO::FETCH_ASSOC) 查询返回多维数组
+               2.update方法参数数组提示
+*
+*/
