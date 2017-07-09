@@ -3,6 +3,7 @@
  * SQL操作类：基于PDO
  *
  * 2017-2-8   admin@ksust.com
+ * v1.0.2
  * */
 
 /*
@@ -72,7 +73,7 @@ Class SQL
 
             if ($data[$arr['Field']] == null) { //对于默认值
                 if ($arr['Type'] == "datetime") $value .= "'" . date('Y-m-d H:i:s') . "'";//默认时间类型
-                else $value .= "''";//默认空
+                else $value .= "NULL";//默认空 NULL
             } else  $value .= "'" . $data[$arr['Field']] . "'";//默认加引号
             $first = false;
         }
