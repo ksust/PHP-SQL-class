@@ -1,14 +1,10 @@
 <?php
-/*
- * SQL操作类：基于PDO
- *
- * 2017-2-8   admin@ksust.com
- * v1.0.2
- * */
-
-/*
- * 操作类：根据表名初始化
- * 类似thinkphpM方法，使用M方法初始化*/
+/**
+ * Class SQL
+ * @see SQL操作类：基于PDO,根据表名初始化,默认持久化和utf8
+ * @Time 2017-2-8   admin@ksust.com
+ * @version 1.0.3
+ */
 
 Class SQL
 {
