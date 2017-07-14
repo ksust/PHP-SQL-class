@@ -28,7 +28,7 @@ Class SQL
         $this->tableName = $tableName;
         try {
             $this->db = new PDO($conn['dsn'], $conn['user'], $conn['pass'],
-                array(PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES 'utf8';"));/*解决存入数据库时乱码问题*/
+                array(PDO::MYSQL_ATTR_INIT_COMMAND => "SET NAMES 'utf8';",PDO::ATTR_PERSISTENT => true));/*解决存入数据库时乱码问题，并持久化*/
         } catch (PDOException $e) {
             die("数据库连接错误:" . $e->getMessage());
         }
