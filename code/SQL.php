@@ -3,20 +3,34 @@
  * Class SQL
  * @see SQL操作类：基于PDO,根据表名初始化,默认持久化和utf8
  * @Time 2017-2-8   admin@ksust.com
- * @version 1.0.3
+ * @version 1.0.4
+ * @property tableName  数据表名
+ * @property tableColum 表列名数组
+ * @property db PDO对象
+ * @property sql 最后执行的sql语句（执行时使用prepare）
+ * @property where 构造过程中的where部分，被构造后带引号
+ * @property limit 构造过程limit部分
+ * @property order 构造过程order部分
+ * @property field 构造过程field部分，默认*
+ * @see     约定 每个sql与句段结束后空格
  */
 
 Class SQL
 {
-    //约定 每个sql与句段结束后空格
-    public $tableName;//数据表名
-    public $tableColum = array();//数据表列名,每个列名含如["Field"]=> string(2) "id" ["Type"]=> string(7) "int(11)" ["Null"]=> string(2) "NO" ["Key"]=> string(3) "PRI" ["Default"]=> NULL ["Extra"]=> string(14) "auto_increment"
-    public $db = null;//数据库连接
-    public $sql;//最后构造的sql语句
-    public $where = "";//字符串，在where方法中，每行 ['Field'],['Value'],['Type'](逻辑类型，如 =，<,默认=)，被构造后带引号
-    public $limit = "LIMIT 100";//字符串，默认100条,格式  limit  起始,条数
-    public $field = "*";//字段值，默认*
+    public $tableName;
+    public $tableColum = [];
+    public $db = null;
+    public $sql;
+    public $where = '';
+    public $limit = null;
+    public $order='';
+    public $field = '*';
 
+    /**
+     * SQL constructor
+     * @param null $tableName 操作表名，按表操作
+     * @param array $conn 数据库连接信息，默认配置文件dataabse.php
+     */
     function __construct($tableName=null, $conn = array())
     {
         //构造方法默认使用配置数据库连接
@@ -31,30 +45,48 @@ Class SQL
        if($tableName!=null) $this->tableColum = $this->db->query("SHOW COLUMNS FROM `$this->tableName` ")->fetchAll(PDO::FETCH_ASSOC);//获取列名
     }
 
-    //查找最新一条，一般情况返回true，没有找到返回false；若指明返回找到的行，则返回行(一维)
+
+    /**
+     * @param bool $returnFind 是否返回查找到的最新一条数据
+     * @param bool $dissql
+     * @return bool 是否查找到 或者 一维数组（最新一条）
+     */
     function find($returnFind = false, $dissql = false)
     {
         $this->sql = "SELECT $this->field FROM `$this->tableName` $this->where LIMIT 1";
-        if ($dissql) echo $this->sql;
-        $get = $this->db->query($this->sql)->fetchAll(PDO::FETCH_ASSOC);//获取多维数组，每维列名为索引
+        $this->sql=$this->db->prepare($this->sql);//预处理，如转义、防注入等等
+        if ($dissql) echo $this->sql->queryString;
+        $this->sql->execute();
+        $get=$this->sql->fetchAll(PDO::FETCH_ASSOC);
         $this->where = "";//为了安全
         if (count($get) == 0) return false;//返回空
         else if (!$returnFind) return true;
         return $get[0];
     }
 
-    //select方法，与where  limit连贯使用（二维数组，数据行）
+    /**
+     * @see 与where  limit连贯使用（二维数组，数据行）
+     * @param bool $dissql
+     * @return array|null 二维数组或者false
+     */
     function select($dissql = false)
     {
-        $this->sql = "SELECT $this->field FROM `$this->tableName` $this->where $this->limit";
-        if ($dissql) echo $this->sql;
-        $get = $this->db->query($this->sql)->fetchAll(PDO::FETCH_ASSOC);//获取多维数组，每维列名为索引
+        $this->sql = "SELECT $this->field FROM `$this->tableName` $this->where $this->order $this->limit";
+        $this->sql=$this->db->prepare($this->sql);//预处理，如转义、防注入等等
+        if ($dissql) echo $this->sql->queryString;
+        $this->sql->execute();
+        $get=$this->sql->fetchAll(PDO::FETCH_ASSOC);
         $this->where = "";//为了安全
         if (count($get) == 0) return null;//返回空
         return $get;
     }
 
-    //insert方法，单独使用，传入要设置的键值索引数组，没传入的键默认空或者时间，默认返回最新自增id，否则如果插入失败返回false（根据影响行数）
+    /**
+     * @see 单独使用，传入要设置的键值索引数组，没传入的键默认空或者时间
+     * @param $data=[field=>value,...]
+     * @param bool $dissql
+     * @return bool|string 默认返回最新自增id，否则如果插入失败返回false
+     */
     function insert($data, $dissql = false)
     {
         $colum = "";
@@ -74,12 +106,19 @@ Class SQL
             $first = false;
         }
         $this->sql = "INSERT INTO `$this->tableName` ( $colum) VALUES ( $value )";
-        if ($dissql) echo $this->sql;
-        if ($this->db->query($this->sql)->rowCount() >= 1) return $this->db->lastInsertId();
+        $this->sql=$this->db->prepare($this->sql);//预处理，如转义、防注入等等
+        if ($dissql) echo $this->sql->queryString;
+        $this->sql->execute();
+        if($this->sql->rowCount()>=1) return $this->db->lastInsertId();
         else return false;
     }
 
-    //必须结合where使用，错误返回false，否则返回影响行数>=1
+    /**
+     * @see 必须结合where使用，错误返回false，否则返回影响行数>=1
+     * @param array $data
+     * @param bool $dissql
+     * @return bool|int
+     */
     function update($data=array(), $dissql = false)
     {
         if ($this->where == "") return false;
@@ -99,28 +138,43 @@ Class SQL
             $first = false;
         }
         $this->sql = "UPDATE `$this->tableName` SET $set $this->where";
-        if ($dissql) echo $this->sql;
+        $this->sql=$this->db->prepare($this->sql);//预处理，如转义、防注入等等
+        if ($dissql) echo $this->sql->queryString;
+        $this->sql->execute();
         $this->where = "";//为了安全
-        $updateCount = $this->db->query($this->sql)->rowCount();
+        $updateCount = $this->sql->rowCount();
         if ($updateCount <= 0) return false;
         return $updateCount;
     }
 
     //必须配合where使用,返回删除条数，失败返回false
+
+    /**
+     * @see 可能需要配合回滚
+     * @param bool $dissql
+     * @return bool|int
+     */
     function delete($dissql = false)
     {
         if ($this->where == "") return false;
         $this->sql = "DELETE FROM `$this->tableName` $this->where";
-        if ($dissql) echo $this->sql;
+        $this->sql=$this->db->prepare($this->sql);//预处理，如转义、防注入等等
+        if ($dissql) echo $this->sql->queryString;
+        $this->sql->execute();
         $this->where = "";//为了安全
-        $deleteCount = $this->db->query($this->sql)->rowCount();
+        $deleteCount = $this->sql->rowCount();
+        //$this->db->rollBack();//可能需要回滚
         if ($deleteCount <= 0) return false;
         return $deleteCount;
 
     }
 
-    //在where方法中，每行 ['Field'],['Value'],['Type'](逻辑类型，如 =，<,默认=)，被构造后带引号
-    //如下方法中：$w=array('Field'=>Value),$type=array('Field'=>Type)表示对应逻辑，,默认空时逻辑为=,Field在左;多条件连接默认AND
+    /**
+     * @param array $w =[field=>value,...]
+     * @param array $type=array('Field'=>Value),$type=array('Field'=>Type)表示对应逻辑，,默认空时逻辑为=,Field在左;
+     * @param string $link 多条件连接默认AND
+     * @return $this
+     */
     function where($w = array(), $type = array('logic' => '='), $link = "AND")
     {
         if (count($w) == 0) {
@@ -139,11 +193,42 @@ Class SQL
         return $this;
     }
 
-    //limit  当没有调用时默认一百条
+    /**
+     * @param $start
+     * @param int $length
+     * @return $this
+     */
     function limit($start, $length = 100)
     {
         if ($start < 0) $start = 0;
         $this->limit = "LIMIT $start,$length ";
+        return $this;
+    }
+
+    /**
+     * @see 排序，自写字符串
+     * @param string $orderby
+     * @return $this
+     */
+    function order($orderby='order by id desc'){
+        $this->order=$orderby;
+        return $this;
+    }
+
+    /**
+     * $see 设置查询field，默认为*
+     * @param array $field
+     * @return $this
+     */
+    function setField($field=['*']){
+        if(count($field)<=0) return $this;
+        $this->field='';
+        $count=0;
+        //这里不用验证列名，在执行prepare时会验证
+        foreach ($field as $item){
+            if($count>0) $this->field.=',';
+            $this->field.='`'.$item.'`';
+        }
         return $this;
     }
 
@@ -154,9 +239,3 @@ function M($tableName=null, $conn = array())
 {
     return new SQL($tableName, $conn);
 }
-/*
- * 1.01:小更改：
-               1.对于直接使用SQL语句查询而不特别针对某表时，可直接使用M方法不传参（或者传参null），然后直接使用M()->db->query($sql)->fetchAll(PDO::FETCH_ASSOC) 查询返回多维数组
-               2.update方法参数数组提示
-*
-*/
