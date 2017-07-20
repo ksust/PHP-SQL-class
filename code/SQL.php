@@ -3,7 +3,7 @@
  * Class SQL
  * @see SQL操作类：基于PDO,根据表名初始化,默认持久化和utf8
  * @Time 2017-2-8   admin@ksust.com
- * @version 1.0.4
+ * @version 1.0.5
  * @property tableName  数据表名
  * @property tableColum 表列名数组
  * @property db PDO对象
@@ -99,7 +99,7 @@ Class SQL
             }
             $colum .= "`" . $arr['Field'] . "`";
 
-            if ($data[$arr['Field']] == null) { //对于默认值
+            if (!isset($data[$arr['Field']])) { //对于默认值
                 if ($arr['Type'] == "datetime") $value .= "'" . date('Y-m-d H:i:s') . "'";//默认时间类型
                 else $value .= "NULL";//默认空 NULL
             } else  $value .= "'" . $data[$arr['Field']] . "'";//默认加引号
@@ -186,7 +186,8 @@ Class SQL
         foreach ($w as $key => $v) {
             if (!$first) $where .= "$link ";
             $logic = $type[$key] == null ? '=' : $type[$key];
-            $where .= "`$key` $logic '$v' ";
+            if(!isset($v)) $where .= "`$key` IS NULL ";//判null不能用=
+            else $where .= "`$key` $logic '$v' ";
             $first = false;
         }
         $this->where = $where;
