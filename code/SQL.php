@@ -3,7 +3,7 @@
  * Class SQL
  * @see SQL操作类：基于PDO,根据表名初始化,默认持久化和utf8
  * @Time 2017-2-8   admin@ksust.com
- * @version 1.0.5
+ * @version 1.0.7
  * @property tableName  数据表名
  * @property tableColum 表列名数组
  * @property db PDO对象
@@ -42,9 +42,17 @@ Class SQL
         } catch (PDOException $e) {
             die("数据库连接错误:" . $e->getMessage());
         }
-       if($tableName!=null) $this->tableColum = $this->db->query("SHOW COLUMNS FROM `$this->tableName` ")->fetchAll(PDO::FETCH_ASSOC);//获取列名
+
     }
 
+    /**
+     * 获得并缓存当前数据表列，用于在基本操作之前调用而不是初始化时调用，减少初始化未操作的大量消耗
+     * 在find select insert update delete 之前调用
+     */
+    function before(){
+        if($this->tableName!=null && count($this->tableColum)<=0)
+            $this->tableColum = $this->db->query("SHOW COLUMNS FROM `$this->tableName` ")->fetchAll(PDO::FETCH_ASSOC);//获取列名
+    }
 
     /**
      * @param bool $returnFind 是否返回查找到的最新一条数据
@@ -53,6 +61,7 @@ Class SQL
      */
     function find($returnFind = false, $dissql = false)
     {
+        $this->before();
         $this->sql = "SELECT $this->field FROM `$this->tableName` $this->where LIMIT 1";
         $this->sql=$this->db->prepare($this->sql);//预处理，如转义、防注入等等
         if ($dissql) echo $this->sql->queryString;
@@ -71,6 +80,7 @@ Class SQL
      */
     function select($dissql = false)
     {
+        $this->before();
         $this->sql = "SELECT $this->field FROM `$this->tableName` $this->where $this->order $this->limit";
         $this->sql=$this->db->prepare($this->sql);//预处理，如转义、防注入等等
         if ($dissql) echo $this->sql->queryString;
@@ -87,25 +97,39 @@ Class SQL
      * @param bool $dissql
      * @return bool|string 默认返回最新自增id，否则如果插入失败返回false
      */
-    function insert($data, $dissql = false)
+    function insert($insert, $dissql = false)
     {
+        $this->before();
         $colum = "";
         $value = "";
         $first = true;
+        //首先构造列名
         foreach ($this->tableColum as $arr) {
-            if (!$first) {
-                $colum .= ",";
-                $value .= ",";
-            }
+            if (!$first) $colum .= ",";
             $colum .= "`" . $arr['Field'] . "`";
-
-            if (!isset($data[$arr['Field']])) { //对于默认值
-                if ($arr['Type'] == "datetime") $value .= "'" . date('Y-m-d H:i:s') . "'";//默认时间类型
-                else $value .= "NULL";//默认空 NULL
-            } else  $value .= "'" . $data[$arr['Field']] . "'";//默认加引号
-            $first = false;
+            $first=false;
         }
-        $this->sql = "INSERT INTO `$this->tableName` ( $colum) VALUES ( $value )";
+        //接下来构造数据，以批量插入的方式构造
+        if(count($insert)==count($insert,1)) $insertData[1]=$insert;//传入一维数组时
+        else $insertData=$insert;
+        $dataFirst=true;//批量数据是否第一个
+        foreach ($insertData as $data){
+            $first=true;//每组数据是否第一个
+            if(!$dataFirst) $value.=',';
+            $value.='(';
+            foreach ($this->tableColum as $arr) {
+                if (!$first) $value .= ",";
+                if (!isset($data[$arr['Field']])) { //对于默认值
+                    if ($arr['Type'] == "datetime") $value .= "'" . date('Y-m-d H:i:s') . "'";//默认时间类型
+                    else $value .= "NULL";//默认空 NULL
+                } else  $value .= "'" . $data[$arr['Field']] . "'";//默认加引号
+                $first = false;
+            }
+            $value.=')';
+            $dataFirst=false;
+        }
+
+        $this->sql = "INSERT INTO `$this->tableName` ( $colum) VALUES  $value";
         $this->sql=$this->db->prepare($this->sql);//预处理，如转义、防注入等等
         if ($dissql) echo $this->sql->queryString;
         $this->sql->execute();
@@ -121,6 +145,7 @@ Class SQL
      */
     function update($data=array(), $dissql = false)
     {
+        $this->before();
         if ($this->where == "") return false;
         if (count($data) <= 0) return false;//默认改变值不能为空
         $set = "";
@@ -156,6 +181,7 @@ Class SQL
      */
     function delete($dissql = false)
     {
+        $this->before();
         if ($this->where == "") return false;
         $this->sql = "DELETE FROM `$this->tableName` $this->where";
         $this->sql=$this->db->prepare($this->sql);//预处理，如转义、防注入等等
@@ -232,7 +258,18 @@ Class SQL
         }
         return $this;
     }
-
+    /**
+     * 执行自定义SQL语句，返回相应结果数组
+     * @param $sql
+     * @return array
+     */
+    public function query($sql){
+        $sql=$this->db->prepare($sql);//预处理，如转义、防注入等等
+        $sql->execute();
+        $get=$sql->fetchAll(PDO::FETCH_ASSOC);
+        if (count($get) == 0) return null;//返回空
+        return $get;
+    }
 }
 
 //M方法，表名，链接（为空时使用当前目录  database.php）
@@ -240,3 +277,8 @@ function M($tableName=null, $conn = array())
 {
     return new SQL($tableName, $conn);
 }
+
+/**
+ * 1.0.6 增加了insert批量插入，传入多为数组即可，返回为插入第一条的自增id（从左到右）
+ * 1.0.7 ：增加自定义sql执行，及query方法
+ */
